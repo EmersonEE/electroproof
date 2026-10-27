@@ -275,17 +275,38 @@ label {
 
 .tile:hover { border-color: var(--border-strong); transform: translateY(-2px); }
 
-.tile img {
+.tile-media {
+  min-height: 180px;
+  background: linear-gradient(110deg, #0d141d 8%, #16202c 20%, #0d141d 36%);
+  background-size: 220% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.tile-media img {
   display: block;
   width: 100%;
   height: auto;
-  background: #0a1017;
+  opacity: 0;
+  transition: opacity 260ms ease-out;
 }
 
-.tile img.tile-missing {
+.tile-media img.is-loaded { opacity: 1; }
+
+.tile-media.is-ready {
+  min-height: 0;
+  background: #0a1017;
+  animation: none;
+}
+
+.tile-media.tile-missing {
   min-height: 160px;
   background:
     repeating-linear-gradient(45deg, #0d141d, #0d141d 10px, #0a1017 10px, #0a1017 20px);
+  animation: none;
+}
+
+@keyframes shimmer {
+  to { background-position: -220% 0; }
 }
 
 .tile-body { padding: 12px 14px 16px; }

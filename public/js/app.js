@@ -212,11 +212,17 @@ function renderGallery(evidences) {
     const card = document.createElement("article");
     card.className = "tile";
 
+    // Sin `src` todavía: un alt visible haría que el navegador pinte el icono
+    // de imagen rota. Usamos un contenedor con esqueleto hasta que cargue.
+    const media = document.createElement("div");
+    media.className = "tile-media";
+
     const image = document.createElement("img");
-    image.alt = evidence.title;
+    image.alt = "";
     image.loading = "lazy";
     image.decoding = "async";
-    card.append(image);
+    media.append(image);
+    card.append(media);
 
     const body = document.createElement("div");
     body.className = "tile-body";
@@ -242,11 +248,11 @@ function renderGallery(evidences) {
     });
 
     ui.grid.append(card);
-    loadImage(evidence.id, image);
+    loadImage(evidence.id, image, evidence.title, media);
   }
 }
 
-async function loadImage(evidenceId, image) {
+async function loadImage(evidenceId, image, title, media) {
   const token = state.token;
   if (!token) return;
 
@@ -254,12 +260,18 @@ async function loadImage(evidenceId, image) {
     const blob = await api.image(token, evidenceId);
     if (state.token !== token) return; // la sesión terminó: no mostrar nada
 
+    image.addEventListener("load", () => {
+      image.alt = title;
+      image.classList.add("is-loaded");
+      media.classList.add("is-ready");
+    }, { once: true });
+
     const url = URL.createObjectURL(blob);
     state.objectUrls.push(url);
     image.src = url;
   } catch {
+    media.classList.add("is-ready", "tile-missing");
     image.alt = "Imagen no disponible";
-    image.classList.add("tile-missing");
   }
 }
 

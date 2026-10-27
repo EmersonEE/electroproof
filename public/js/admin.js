@@ -258,9 +258,9 @@ function buildEvidenceItem(evidence) {
 
   const image = document.createElement("img");
   image.className = "admin-thumb";
-  image.alt = evidence.title;
+  image.alt = "";
   image.loading = "lazy";
-  loadThumbnail(evidence.object_path, image);
+  loadThumbnail(evidence.object_path, image, evidence.title);
 
   const info = document.createElement("div");
 
@@ -307,13 +307,17 @@ function buildEvidenceItem(evidence) {
   return item;
 }
 
-async function loadThumbnail(path, image) {
+async function loadThumbnail(path, image, title) {
   const { data, error } = await db.storage.from("evidence").download(path);
 
   if (error || !data) {
     image.classList.add("tile-missing");
     return;
   }
+
+  image.addEventListener("load", () => {
+    image.alt = title;
+  }, { once: true });
 
   const url = URL.createObjectURL(data);
   thumbUrls.push(url);
