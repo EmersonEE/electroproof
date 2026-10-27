@@ -58,6 +58,10 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_SIDE = 1600;
 
+// Texto de la marca de agua. Se dibuja repetido en diagonal sobre la imagen.
+const WATERMARK_TEXT =
+  "Emerson Pérez · PORTAFOLIO PRIVADO · Acceso autorizado";
+
 const CATEGORY_LABELS = {
   deposito: "Depósito",
   materiales: "Materiales",
@@ -429,8 +433,8 @@ function canvasPoint(event) {
 }
 
 function drawWatermark(ctx, width, height) {
-  const text = "PORTAFOLIO PRIVADO · Acceso autorizado";
-  const size = Math.max(12, Math.round(width / 46));
+  const text = WATERMARK_TEXT;
+  const size = Math.max(11, Math.round(width / 54));
 
   ctx.save();
   ctx.translate(width / 2, height / 2);
