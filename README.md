@@ -6,6 +6,8 @@ Un cliente entra con un **código de un solo uso**, ve la galería durante
 
 > Trabajos reales. Confianza real.
 
+Sitio: https://emersonee.github.io/electroproof/
+
 ## Stack
 
 - **Frontend:** HTML + CSS + JavaScript, publicado en GitHub Pages (HTTPS).
@@ -65,8 +67,8 @@ npm run db:push              # aplica migraciones pendientes
 - [x] Etapa 1: proyecto Supabase
 - [x] Etapa 2: esquema, RLS, bucket privado
 - [x] Etapa 3: usuario admin + políticas de Storage
-- [ ] Etapa 4: repositorio y manejo de claves
-- [ ] Etapa 5: Edge Functions completas
-- [ ] Etapa 6: frontend
-- [ ] Etapa 7: marca de agua
+- [x] Etapa 4: repositorio y manejo de claves
+- [x] Etapa 5: Edge Functions completas
+- [x] Etapa 6: frontend
+- [x] Etapa 7: marca de agua y tapado de datos
 - [ ] Etapa 8: publicación y pruebas de seguridad
