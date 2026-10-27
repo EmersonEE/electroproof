@@ -248,6 +248,10 @@ select.text-input { cursor: pointer; }
 .codes-head { margin: 26px 0 12px; }
 .codes-head h3 { margin: 0; }
 
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.code-item .admin-actions { flex-direction: row; }
+
 @media (max-width: 700px) {
   .code-form-row { grid-template-columns: 1fr; }
   .code-form-row .btn-primary { width: 100%; }

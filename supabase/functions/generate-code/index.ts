@@ -29,12 +29,14 @@ Deno.serve(async (req: Request) => {
     const rawLabel = typeof body.label === "string" ? body.label.trim() : "";
     const label = rawLabel.length > 0 ? rawLabel.slice(0, 80) : null;
 
-    const rawHours = Number(body.expires_in_hours);
-    const hours = Number.isFinite(rawHours)
-      ? Math.min(Math.max(Math.trunc(rawHours), 1), 168)
-      : 24;
+    // Vigencia del código: minutos, entre 1 y 10. No confundir con la sesión
+    // del cliente, que siempre dura 5 minutos.
+    const rawMinutes = Number(body.expires_in_minutes);
+    const minutes = Number.isFinite(rawMinutes)
+      ? Math.min(Math.max(Math.trunc(rawMinutes), 1), 10)
+      : 10;
 
-    const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + minutes * 60 * 1000)
       .toISOString();
 
     const supabase = serviceClient();
@@ -67,7 +69,7 @@ Deno.serve(async (req: Request) => {
           success: true,
           code,
           expires_at: expiresAt,
-          expires_in_hours: hours,
+          expires_in_minutes: minutes,
         });
       }
 

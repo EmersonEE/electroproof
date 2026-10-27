@@ -108,7 +108,8 @@
         <h2>Códigos de acceso</h2>
         <p class="hint">
           Cada código es de un solo uso y abre la galería durante 5 minutos.
-          El código se muestra una sola vez: cópialo antes de cerrar el aviso.
+          Si no se usa, caduca en el plazo elegido (máximo 10 minutos).
+          Se muestra una sola vez: cópialo antes de cerrar el aviso.
         </p>
 
         <form id="code-form" class="code-form" novalidate>
@@ -119,13 +120,12 @@
                      maxlength="80" placeholder="Cliente Juan — tablero" />
             </div>
             <div class="field field-small">
-              <label for="code-hours">Válido por</label>
-              <select id="code-hours" class="text-input">
-                <option value="1">1 hora</option>
-                <option value="6">6 horas</option>
-                <option value="24" selected>24 horas</option>
-                <option value="72">3 días</option>
-                <option value="168">7 días</option>
+              <label for="code-minutes">Caduca en</label>
+              <select id="code-minutes" class="text-input">
+                <option value="1">1 minuto</option>
+                <option value="3">3 minutos</option>
+                <option value="5">5 minutos</option>
+                <option value="10" selected>10 minutos</option>
               </select>
             </div>
             <button id="code-submit" class="btn btn-primary" type="submit">
@@ -149,9 +149,14 @@
 
         <div class="card-head codes-head">
           <h3>Códigos recientes</h3>
-          <button id="codes-refresh" class="btn btn-ghost" type="button">
-            Actualizar
-          </button>
+          <div class="head-actions">
+            <button id="codes-cleanup" class="btn btn-ghost" type="button">
+              Limpiar no disponibles
+            </button>
+            <button id="codes-refresh" class="btn btn-ghost" type="button">
+              Actualizar
+            </button>
+          </div>
         </div>
         <div id="code-list" class="admin-list" aria-live="polite"></div>
         <p id="code-empty" class="empty" hidden>

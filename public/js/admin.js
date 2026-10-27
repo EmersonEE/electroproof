@@ -24,7 +24,7 @@ const ui = {
   evidenceEmpty: el("evidence-empty"),
   codeForm: el("code-form"),
   codeLabel: el("code-label"),
-  codeHours: el("code-hours"),
+  codeMinutes: el("code-minutes"),
   codeSubmit: el("code-submit"),
   codeStatus: el("code-status"),
   codeResult: el("code-result"),
@@ -35,6 +35,7 @@ const ui = {
   codeList: el("code-list"),
   codeEmpty: el("code-empty"),
   codesRefresh: el("codes-refresh"),
+  codesCleanup: el("codes-cleanup"),
 };
 
 const ALLOWED_TYPES = [
@@ -57,6 +58,7 @@ const CATEGORY_LABELS = {
 
 let db = null;
 let thumbUrls = [];
+let currentCodes = [];
 
 /* ---------- helpers ---------- */
 
@@ -421,13 +423,23 @@ async function loadCodes() {
     .limit(50);
 
   if (error) {
+    currentCodes = [];
     ui.codeEmpty.hidden = false;
     ui.codeEmpty.textContent = "No se pudieron cargar los códigos.";
     return;
   }
 
+  currentCodes = data;
   ui.codeList.replaceChildren();
   ui.codeEmpty.hidden = data.length > 0;
+
+  const removable = data.filter(
+    (code) => codeStatus(code).key !== "available",
+  );
+  ui.codesCleanup.disabled = removable.length === 0;
+  ui.codesCleanup.textContent = removable.length > 0
+    ? `Limpiar no disponibles (${removable.length})`
+    : "Limpiar no disponibles";
 
   for (const code of data) {
     ui.codeList.append(buildCodeItem(code));
@@ -466,12 +478,19 @@ function buildCodeItem(code) {
 
   if (status.key === "available") {
     const revoke = document.createElement("button");
-    revoke.className = "btn btn-danger";
+    revoke.className = "btn btn-ghost";
     revoke.type = "button";
     revoke.textContent = "Revocar";
     revoke.addEventListener("click", () => revokeCode(code));
     actions.append(revoke);
   }
+
+  const remove = document.createElement("button");
+  remove.className = "btn btn-danger";
+  remove.type = "button";
+  remove.textContent = "Eliminar";
+  remove.addEventListener("click", () => deleteCode(code));
+  actions.append(remove);
 
   item.append(info, actions);
   return item;
@@ -497,14 +516,62 @@ async function revokeCode(code) {
   loadCodes();
 }
 
+async function deleteCode(code) {
+  const confirmed = confirm(
+    `¿Eliminar el código de "${code.label || "sin etiqueta"}"?\n\n` +
+      "Se borra el registro. El historial conserva el evento, pero pierde el vínculo con este código.",
+  );
+  if (!confirmed) return;
+
+  const { error } = await db.from("access_codes").delete().eq("id", code.id);
+
+  if (error) {
+    setMessage(ui.codeStatus, "No se pudo eliminar el código.", "bad");
+    return;
+  }
+
+  setMessage(ui.codeStatus, "Código eliminado.", "ok");
+  loadCodes();
+}
+
+async function cleanupCodes() {
+  const removable = currentCodes.filter(
+    (code) => codeStatus(code).key !== "available",
+  );
+
+  if (removable.length === 0) {
+    setMessage(ui.codeStatus, "No hay códigos usados, vencidos o revocados.", "ok");
+    return;
+  }
+
+  const confirmed = confirm(
+    `¿Eliminar ${removable.length} código(s) usados, vencidos o revocados?`,
+  );
+  if (!confirmed) return;
+
+  const { error } = await db
+    .from("access_codes")
+    .delete()
+    .in("id", removable.map((code) => code.id));
+
+  if (error) {
+    setMessage(ui.codeStatus, "No se pudieron eliminar los códigos.", "bad");
+    return;
+  }
+
+  setMessage(ui.codeStatus, `${removable.length} código(s) eliminados.`, "ok");
+  loadCodes();
+}
+
 ui.codesRefresh.addEventListener("click", loadCodes);
+ui.codesCleanup.addEventListener("click", cleanupCodes);
 
 ui.codeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!db) return;
 
   const label = ui.codeLabel.value.trim();
-  const hours = Number(ui.codeHours.value) || 24;
+  const minutes = Number(ui.codeMinutes.value) || 10;
 
   ui.codeSubmit.disabled = true;
   ui.codeSubmit.textContent = "Generando…";
@@ -513,7 +580,7 @@ ui.codeForm.addEventListener("submit", async (event) => {
 
   try {
     const { data, error } = await db.functions.invoke("generate-code", {
-      body: { label: label || null, expires_in_hours: hours },
+      body: { label: label || null, expires_in_minutes: minutes },
     });
 
     if (error) {
