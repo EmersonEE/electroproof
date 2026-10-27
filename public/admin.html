@@ -52,6 +52,18 @@
     </section>
 
     <section id="panel" hidden>
+      <nav class="tabs" role="tablist" aria-label="Secciones del panel">
+        <button class="tab" type="button" role="tab" data-tab="tab-evidence"
+                aria-selected="true">Evidencias</button>
+        <button class="tab" type="button" role="tab" data-tab="tab-codes"
+                aria-selected="false">Códigos</button>
+        <button class="tab" type="button" role="tab" data-tab="tab-sessions"
+                aria-selected="false">Sesiones</button>
+        <button class="tab" type="button" role="tab" data-tab="tab-logs"
+                aria-selected="false">Historial</button>
+      </nav>
+
+      <div id="tab-evidence" class="tab-panel" role="tabpanel">
       <div class="admin-grid">
         <form id="upload-form" class="card">
           <h2>Subir evidencia</h2>
@@ -104,6 +116,14 @@
         </section>
       </div>
 
+      <p class="fineprint admin-warning">
+        Antes de subir un comprobante real, tapa nombres completos, números de
+        cuenta, teléfonos e identificadores de transacción. Lo que subas queda
+        visible para cualquier cliente con un código válido.
+      </p>
+      </div><!-- /tab-evidence -->
+
+      <div id="tab-codes" class="tab-panel" role="tabpanel" hidden>
       <section class="card codes-card">
         <h2>Códigos de acceso</h2>
         <p class="hint">
@@ -163,12 +183,52 @@
           Todavía no hay códigos creados.
         </p>
       </section>
+      </div><!-- /tab-codes -->
 
-      <p class="fineprint admin-warning">
-        Antes de subir un comprobante real, tapa nombres completos, números de
-        cuenta, teléfonos e identificadores de transacción. Lo que subas queda
-        visible para cualquier cliente con un código válido.
-      </p>
+      <div id="tab-sessions" class="tab-panel" role="tabpanel" hidden>
+        <section class="card">
+          <div class="card-head">
+            <h2>Sesiones activas</h2>
+            <div class="head-actions">
+              <button id="sessions-refresh" class="btn btn-ghost" type="button">
+                Actualizar
+              </button>
+              <button id="sessions-revoke-all" class="btn btn-danger" type="button">
+                Revocar todas
+              </button>
+            </div>
+          </div>
+
+          <p class="hint">
+            Una sesión dura 5 minutos desde que se canjea el código. Revocarla
+            corta el acceso en la siguiente petición, aunque falten minutos.
+          </p>
+
+          <div id="session-list" class="admin-list" aria-live="polite"></div>
+          <p id="session-empty" class="empty" hidden>
+            No hay sesiones activas.
+          </p>
+          <p id="session-status" class="status" role="status" hidden></p>
+        </section>
+      </div>
+
+      <div id="tab-logs" class="tab-panel" role="tabpanel" hidden>
+        <section class="card">
+          <div class="card-head">
+            <h2>Historial</h2>
+            <button id="logs-refresh" class="btn btn-ghost" type="button">
+              Actualizar
+            </button>
+          </div>
+          <p class="hint">
+            Últimos 50 eventos. La IP se guarda hasheada, nunca en claro.
+          </p>
+          <div id="log-list" class="admin-list" aria-live="polite"></div>
+          <p id="log-empty" class="empty" hidden>
+            Todavía no hay actividad registrada.
+          </p>
+        </section>
+      </div>
     </section>
   </main>
 

@@ -36,6 +36,14 @@ const ui = {
   codeEmpty: el("code-empty"),
   codesRefresh: el("codes-refresh"),
   codesCleanup: el("codes-cleanup"),
+  sessionList: el("session-list"),
+  sessionEmpty: el("session-empty"),
+  sessionStatus: el("session-status"),
+  sessionsRefresh: el("sessions-refresh"),
+  sessionsRevokeAll: el("sessions-revoke-all"),
+  logList: el("log-list"),
+  logEmpty: el("log-empty"),
+  logsRefresh: el("logs-refresh"),
 };
 
 const ALLOWED_TYPES = [
@@ -175,8 +183,39 @@ function enterPanel() {
   ui.login.hidden = true;
   ui.panel.hidden = false;
   ui.logout.hidden = false;
-  loadEvidence();
-  loadCodes();
+  selectTab("tab-evidence");
+}
+
+/* ---------- pestañas ---------- */
+
+const tabs = Array.from(document.querySelectorAll(".tab"));
+
+const tabPanels = {
+  "tab-evidence": el("tab-evidence"),
+  "tab-codes": el("tab-codes"),
+  "tab-sessions": el("tab-sessions"),
+  "tab-logs": el("tab-logs"),
+};
+
+const tabLoaders = {
+  "tab-evidence": loadEvidence,
+  "tab-codes": loadCodes,
+  "tab-sessions": loadSessions,
+  "tab-logs": loadLogs,
+};
+
+function selectTab(name) {
+  for (const tab of tabs) {
+    tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+  }
+  for (const [key, panel] of Object.entries(tabPanels)) {
+    panel.hidden = key !== name;
+  }
+  tabLoaders[name]?.();
+}
+
+for (const tab of tabs) {
+  tab.addEventListener("click", () => selectTab(tab.dataset.tab));
 }
 
 /* ---------- evidencias ---------- */
@@ -623,6 +662,213 @@ ui.codeCopy.addEventListener("click", async () => {
     ui.codeCopyStatus.textContent = "Selecciónalo y cópialo a mano";
   }
 });
+
+/* ---------- sesiones ---------- */
+
+function remainingLabel(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "Vencida";
+
+  const total = Math.ceil(ms / 1000);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+async function loadSessions() {
+  if (!db) return;
+
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await db
+    .from("client_sessions")
+    .select(
+      "id, created_at, expires_at, last_seen_at, ip_hash, access_codes(label)",
+    )
+    .is("revoked_at", null)
+    .gt("expires_at", nowIso)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    ui.sessionEmpty.hidden = false;
+    ui.sessionEmpty.textContent = "No se pudieron cargar las sesiones.";
+    return;
+  }
+
+  ui.sessionList.replaceChildren();
+  ui.sessionEmpty.hidden = data.length > 0;
+
+  for (const session of data) {
+    ui.sessionList.append(buildSessionItem(session));
+  }
+}
+
+function buildSessionItem(session) {
+  const item = document.createElement("article");
+  item.className = "admin-item session-item";
+
+  const info = document.createElement("div");
+
+  const title = document.createElement("h3");
+  const label = session.access_codes?.label;
+  title.textContent = label ? `Cliente: ${label}` : "Sesión sin etiqueta";
+
+  const meta = document.createElement("div");
+  meta.className = "admin-meta";
+
+  const time = document.createElement("span");
+  time.className = "session-time";
+  time.dataset.expiresAt = session.expires_at;
+  time.textContent = remainingLabel(session.expires_at);
+
+  const created = document.createElement("span");
+  created.textContent = `Inicio: ${formatDate(session.created_at)}`;
+
+  const ip = document.createElement("span");
+  ip.textContent = session.ip_hash
+    ? `IP: ${session.ip_hash.slice(0, 12)}…`
+    : "IP: —";
+
+  const seen = document.createElement("span");
+  seen.textContent = session.last_seen_at
+    ? `Última actividad: ${formatDate(session.last_seen_at)}`
+    : "Sin actividad";
+
+  meta.append(time, created, ip, seen);
+  info.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "admin-actions";
+
+  const revoke = document.createElement("button");
+  revoke.className = "btn btn-danger";
+  revoke.type = "button";
+  revoke.textContent = "Cortar acceso";
+  revoke.addEventListener("click", () => revokeSession(session));
+  actions.append(revoke);
+
+  item.append(info, actions);
+  return item;
+}
+
+async function revokeSession(session) {
+  const confirmed = confirm(
+    "¿Cortar esta sesión? El cliente perderá el acceso en su siguiente petición.",
+  );
+  if (!confirmed) return;
+
+  const { error } = await db.functions.invoke("revoke-session", {
+    body: { session_id: session.id },
+  });
+
+  if (error) {
+    setMessage(ui.sessionStatus, "No se pudo revocar la sesión.", "bad");
+    return;
+  }
+
+  setMessage(ui.sessionStatus, "Sesión revocada.", "ok");
+  loadSessions();
+}
+
+async function revokeAllSessions() {
+  const confirmed = confirm("¿Cortar TODAS las sesiones activas?");
+  if (!confirmed) return;
+
+  const { data, error } = await db.functions.invoke("revoke-session", {
+    body: { all: true },
+  });
+
+  if (error) {
+    setMessage(ui.sessionStatus, "No se pudieron revocar las sesiones.", "bad");
+    return;
+  }
+
+  setMessage(
+    ui.sessionStatus,
+    `${data?.revoked ?? 0} sesión(es) revocadas.`,
+    "ok",
+  );
+  loadSessions();
+}
+
+ui.sessionsRefresh.addEventListener("click", loadSessions);
+ui.sessionsRevokeAll.addEventListener("click", revokeAllSessions);
+
+// Mantiene los contadores de las sesiones sin recargar la lista.
+setInterval(() => {
+  for (const node of document.querySelectorAll("[data-expires-at]")) {
+    node.textContent = remainingLabel(node.dataset.expiresAt);
+  }
+}, 1000);
+
+/* ---------- historial ---------- */
+
+const EVENT_LABELS = {
+  code_generated: "Código generado",
+  code_revoked: "Código revocado",
+  redeem_success: "Acceso concedido",
+  redeem_failed: "Intento fallido",
+  redeem_rate_limited: "Bloqueo por intentos",
+  gallery_view: "Galería abierta",
+  image_view: "Imagen vista",
+  session_revoked: "Sesión revocada",
+};
+
+const EVENT_KIND = {
+  redeem_success: "ok",
+  code_generated: "ok",
+  redeem_failed: "bad",
+  redeem_rate_limited: "bad",
+  session_revoked: "bad",
+  code_revoked: "bad",
+};
+
+async function loadLogs() {
+  if (!db) return;
+
+  const { data, error } = await db
+    .from("access_logs")
+    .select("id, event, access_code_id, session_id, ip_hash, detail, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    ui.logEmpty.hidden = false;
+    ui.logEmpty.textContent = "No se pudo cargar el historial.";
+    return;
+  }
+
+  ui.logList.replaceChildren();
+  ui.logEmpty.hidden = data.length > 0;
+
+  for (const log of data) {
+    ui.logList.append(buildLogItem(log));
+  }
+}
+
+function buildLogItem(log) {
+  const item = document.createElement("article");
+  item.className = "admin-item log-item";
+
+  const event = document.createElement("span");
+  event.className = `log-event ${EVENT_KIND[log.event] ?? ""}`;
+  event.textContent = EVENT_LABELS[log.event] ?? log.event;
+
+  const meta = document.createElement("div");
+  meta.className = "log-meta";
+
+  const parts = [formatDate(log.created_at)];
+  if (log.detail) parts.push(log.detail);
+  if (log.ip_hash) parts.push(`IP ${log.ip_hash.slice(0, 10)}…`);
+
+  meta.textContent = parts.join(" · ");
+
+  item.append(event, meta);
+  return item;
+}
+
+ui.logsRefresh.addEventListener("click", loadLogs);
 
 /* ---------- arranque ---------- */
 
