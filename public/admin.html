@@ -70,8 +70,30 @@
 
           <label for="file">Imagen</label>
           <input id="file" class="file-input" type="file" required
-                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
-          <p class="hint">JPG, PNG, WebP o HEIC · máximo 10 MB</p>
+                 accept="image/jpeg,image/png,image/webp" />
+          <p class="hint">JPG, PNG o WebP · máximo 10 MB</p>
+
+          <div id="editor" class="editor" hidden>
+            <div class="editor-stage">
+              <canvas id="editor-canvas"></canvas>
+            </div>
+            <div class="editor-tools">
+              <button id="editor-undo" class="btn btn-ghost" type="button">
+                Deshacer
+              </button>
+              <button id="editor-clear" class="btn btn-ghost" type="button">
+                Limpiar marcas
+              </button>
+              <label class="check check-inline">
+                <input id="editor-watermark" type="checkbox" checked />
+                <span>Marca de agua</span>
+              </label>
+            </div>
+            <p class="hint">
+              Arrastra sobre la imagen para tapar nombres, cuentas o teléfonos.
+              El original no se sube: se procesa en tu navegador.
+            </p>
+          </div>
 
           <label for="title">Título</label>
           <input id="title" class="text-input" type="text" maxlength="120"

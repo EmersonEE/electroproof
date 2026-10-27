@@ -258,6 +258,39 @@ select.text-input { cursor: pointer; }
   .code-value { font-size: 1.5rem; letter-spacing: 0.2em; }
 }
 
+/* ---------- editor de imagen ---------- */
+
+.editor { margin: 0 0 16px; }
+
+.editor-stage {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #080d13;
+  overflow: hidden;
+}
+
+.editor-stage canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.check-inline { margin: 0; font-size: 0.82rem; }
+
 /* ---------- pestañas ---------- */
 
 .tabs {

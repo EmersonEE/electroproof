@@ -19,6 +19,11 @@ const ui = {
   publish: el("publish"),
   uploadSubmit: el("upload-submit"),
   uploadStatus: el("upload-status"),
+  editor: el("editor"),
+  editorCanvas: el("editor-canvas"),
+  editorUndo: el("editor-undo"),
+  editorClear: el("editor-clear"),
+  editorWatermark: el("editor-watermark"),
   refresh: el("refresh"),
   evidenceList: el("evidence-list"),
   evidenceEmpty: el("evidence-empty"),
@@ -46,15 +51,12 @@ const ui = {
   logsRefresh: el("logs-refresh"),
 };
 
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-];
+// HEIC queda fuera a propósito: el navegador no puede procesarlo en canvas,
+// y sin procesarlo no habría forma de tapar datos ni poner marca de agua.
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_SIDE = 1600;
 
 const CATEGORY_LABELS = {
   deposito: "Depósito",
@@ -358,26 +360,247 @@ async function deleteEvidence(evidence) {
 
 ui.refresh.addEventListener("click", loadEvidence);
 
+/* ---------- editor: tapar datos + marca de agua ---------- */
+
+const editor = {
+  image: null,
+  boxes: [],
+  drag: null,
+  watermark: true,
+  objectUrl: null,
+};
+
+function resetEditor() {
+  editor.image = null;
+  editor.boxes = [];
+  editor.drag = null;
+
+  if (editor.objectUrl) {
+    URL.revokeObjectURL(editor.objectUrl);
+    editor.objectUrl = null;
+  }
+
+  const canvas = ui.editorCanvas;
+  const ctx = canvas.getContext("2d");
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width = 1;
+  canvas.height = 1;
+  ui.editor.hidden = true;
+}
+
+async function loadEditorImage(file) {
+  resetEditor();
+
+  const url = URL.createObjectURL(file);
+  editor.objectUrl = url;
+
+  const image = new Image();
+  image.decoding = "async";
+
+  await new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("imagen ilegible"));
+    image.src = url;
+  });
+
+  const scale = Math.min(
+    1,
+    MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight),
+  );
+
+  const canvas = ui.editorCanvas;
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  editor.image = image;
+  editor.boxes = [];
+  ui.editor.hidden = false;
+  renderEditor();
+}
+
+function canvasPoint(event) {
+  const canvas = ui.editorCanvas;
+  const rect = canvas.getBoundingClientRect();
+
+  return {
+    x: (event.clientX - rect.left) * (canvas.width / rect.width),
+    y: (event.clientY - rect.top) * (canvas.height / rect.height),
+  };
+}
+
+function drawWatermark(ctx, width, height) {
+  const text = "PORTAFOLIO PRIVADO · Acceso autorizado";
+  const size = Math.max(12, Math.round(width / 46));
+
+  ctx.save();
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-Math.PI / 6);
+  ctx.globalAlpha = 0.26;
+  ctx.font = `700 ${size}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.lineWidth = Math.max(1, size / 12);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // El paso depende del ancho real del texto para que no se solapen.
+  const stepX = ctx.measureText(text).width + size * 3.5;
+  const stepY = size * 6;
+
+  for (let y = -height; y <= height; y += stepY) {
+    for (let x = -width; x <= width; x += stepX) {
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    }
+  }
+
+  ctx.restore();
+}
+
+let renderQueued = false;
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderEditor();
+  });
+}
+
+function renderEditor() {
+  const canvas = ui.editorCanvas;
+  const ctx = canvas.getContext("2d");
+  if (!editor.image) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(editor.image, 0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#000000";
+  for (const box of editor.boxes) {
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+  }
+
+  if (editor.drag) {
+    const d = editor.drag;
+    ctx.fillRect(
+      Math.min(d.x0, d.x1),
+      Math.min(d.y0, d.y1),
+      Math.abs(d.x1 - d.x0),
+      Math.abs(d.y1 - d.y0),
+    );
+  }
+
+  if (editor.watermark) drawWatermark(ctx, canvas.width, canvas.height);
+}
+
+ui.editorCanvas.addEventListener("pointerdown", (event) => {
+  if (!editor.image) return;
+  event.preventDefault();
+  ui.editorCanvas.setPointerCapture(event.pointerId);
+
+  const p = canvasPoint(event);
+  editor.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+  scheduleRender();
+});
+
+ui.editorCanvas.addEventListener("pointermove", (event) => {
+  if (!editor.drag) return;
+  const p = canvasPoint(event);
+  editor.drag.x1 = p.x;
+  editor.drag.y1 = p.y;
+  scheduleRender();
+});
+
+function finishDrag() {
+  if (!editor.drag) return;
+
+  const d = editor.drag;
+  editor.drag = null;
+
+  const x = Math.min(d.x0, d.x1);
+  const y = Math.min(d.y0, d.y1);
+  const width = Math.abs(d.x1 - d.x0);
+  const height = Math.abs(d.y1 - d.y0);
+
+  if (width > 4 && height > 4) {
+    editor.boxes.push({ x, y, w: width, h: height });
+  }
+
+  scheduleRender();
+}
+
+ui.editorCanvas.addEventListener("pointerup", finishDrag);
+ui.editorCanvas.addEventListener("pointercancel", finishDrag);
+
+ui.editorUndo.addEventListener("click", () => {
+  editor.boxes.pop();
+  scheduleRender();
+});
+
+ui.editorClear.addEventListener("click", () => {
+  editor.boxes = [];
+  scheduleRender();
+});
+
+ui.editorWatermark.addEventListener("change", () => {
+  editor.watermark = ui.editorWatermark.checked;
+  scheduleRender();
+});
+
+ui.file.addEventListener("change", async () => {
+  const file = ui.file.files[0];
+
+  if (!file) {
+    resetEditor();
+    return;
+  }
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    setMessage(ui.uploadStatus, "Formato no permitido. Usa JPG, PNG o WebP.", "bad");
+    ui.file.value = "";
+    resetEditor();
+    return;
+  }
+
+  if (file.size > MAX_BYTES) {
+    setMessage(ui.uploadStatus, "La imagen supera los 10 MB.", "bad");
+    ui.file.value = "";
+    resetEditor();
+    return;
+  }
+
+  setMessage(ui.uploadStatus, "", null);
+
+  try {
+    await loadEditorImage(file);
+  } catch {
+    setMessage(ui.uploadStatus, "No se pudo leer la imagen.", "bad");
+    ui.file.value = "";
+    resetEditor();
+  }
+});
+
+function canvasToJpegBlob() {
+  return new Promise((resolve, reject) => {
+    ui.editorCanvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("no se pudo procesar la imagen"));
+    }, "image/jpeg", 0.9);
+  });
+}
+
 /* ---------- subida ---------- */
 
 ui.uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!db) return;
 
-  const file = ui.file.files[0];
   const title = ui.title.value.trim();
   const description = ui.description.value.trim();
 
-  if (!file) {
-    setMessage(ui.uploadStatus, "Selecciona una imagen.", "bad");
-    return;
-  }
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    setMessage(ui.uploadStatus, "Formato no permitido. Usa JPG, PNG o WebP.", "bad");
-    return;
-  }
-  if (file.size > MAX_BYTES) {
-    setMessage(ui.uploadStatus, "La imagen supera los 10 MB.", "bad");
+  if (!editor.image) {
+    setMessage(ui.uploadStatus, "Selecciona una imagen primero.", "bad");
     return;
   }
   if (title.length < 3) {
@@ -385,15 +608,26 @@ ui.uploadForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  const extension = (file.name.split(".").pop() || "jpg")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .slice(0, 5);
+  // La imagen que se sube es la del canvas: con los datos tapados y la marca
+  // de agua ya dibujada. El archivo original nunca sale del navegador.
+  let file;
+  try {
+    renderEditor();
+    file = await canvasToJpegBlob();
+  } catch {
+    setMessage(ui.uploadStatus, "No se pudo procesar la imagen.", "bad");
+    return;
+  }
+
+  if (file.size > MAX_BYTES) {
+    setMessage(ui.uploadStatus, "La imagen procesada supera los 10 MB.", "bad");
+    return;
+  }
 
   const now = new Date();
   const path = `${now.getFullYear()}/${
     String(now.getMonth() + 1).padStart(2, "0")
-  }/${crypto.randomUUID()}.${extension}`;
+  }/${crypto.randomUUID()}.jpg`;
 
   ui.uploadSubmit.disabled = true;
   ui.uploadSubmit.textContent = "Subiendo…";
@@ -402,7 +636,7 @@ ui.uploadForm.addEventListener("submit", async (event) => {
   try {
     const { error: uploadError } = await db.storage
       .from("evidence")
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, file, { contentType: "image/jpeg", upsert: false });
 
     if (uploadError) {
       setMessage(ui.uploadStatus, "No se pudo subir la imagen.", "bad");
@@ -428,6 +662,7 @@ ui.uploadForm.addEventListener("submit", async (event) => {
     }
 
     ui.uploadForm.reset();
+    resetEditor();
     ui.publish.checked = true;
     setMessage(ui.uploadStatus, "Evidencia subida correctamente.", "ok");
     loadEvidence();
