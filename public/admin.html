@@ -104,6 +104,61 @@
         </section>
       </div>
 
+      <section class="card codes-card">
+        <h2>Códigos de acceso</h2>
+        <p class="hint">
+          Cada código es de un solo uso y abre la galería durante 5 minutos.
+          El código se muestra una sola vez: cópialo antes de cerrar el aviso.
+        </p>
+
+        <form id="code-form" class="code-form" novalidate>
+          <div class="code-form-row">
+            <div class="field">
+              <label for="code-label">Para quién es</label>
+              <input id="code-label" class="text-input" type="text"
+                     maxlength="80" placeholder="Cliente Juan — tablero" />
+            </div>
+            <div class="field field-small">
+              <label for="code-hours">Válido por</label>
+              <select id="code-hours" class="text-input">
+                <option value="1">1 hora</option>
+                <option value="6">6 horas</option>
+                <option value="24" selected>24 horas</option>
+                <option value="72">3 días</option>
+                <option value="168">7 días</option>
+              </select>
+            </div>
+            <button id="code-submit" class="btn btn-primary" type="submit">
+              Generar
+            </button>
+          </div>
+          <p id="code-status" class="status" role="status" hidden></p>
+        </form>
+
+        <div id="code-result" class="code-result" hidden>
+          <span class="code-result-label">Código generado</span>
+          <strong id="code-value" class="code-value"></strong>
+          <div class="code-result-actions">
+            <button id="code-copy" class="btn btn-ghost" type="button">
+              Copiar
+            </button>
+            <span id="code-copy-status" class="hint"></span>
+          </div>
+          <p class="hint" id="code-expiry"></p>
+        </div>
+
+        <div class="card-head codes-head">
+          <h3>Códigos recientes</h3>
+          <button id="codes-refresh" class="btn btn-ghost" type="button">
+            Actualizar
+          </button>
+        </div>
+        <div id="code-list" class="admin-list" aria-live="polite"></div>
+        <p id="code-empty" class="empty" hidden>
+          Todavía no hay códigos creados.
+        </p>
+      </section>
+
       <p class="fineprint admin-warning">
         Antes de subir un comprobante real, tapa nombres completos, números de
         cuenta, teléfonos e identificadores de transacción. Lo que subas queda

@@ -22,6 +22,19 @@ const ui = {
   refresh: el("refresh"),
   evidenceList: el("evidence-list"),
   evidenceEmpty: el("evidence-empty"),
+  codeForm: el("code-form"),
+  codeLabel: el("code-label"),
+  codeHours: el("code-hours"),
+  codeSubmit: el("code-submit"),
+  codeStatus: el("code-status"),
+  codeResult: el("code-result"),
+  codeValue: el("code-value"),
+  codeCopy: el("code-copy"),
+  codeCopyStatus: el("code-copy-status"),
+  codeExpiry: el("code-expiry"),
+  codeList: el("code-list"),
+  codeEmpty: el("code-empty"),
+  codesRefresh: el("codes-refresh"),
 };
 
 const ALLOWED_TYPES = [
@@ -162,6 +175,7 @@ function enterPanel() {
   ui.panel.hidden = false;
   ui.logout.hidden = false;
   loadEvidence();
+  loadCodes();
 }
 
 /* ---------- evidencias ---------- */
@@ -382,6 +396,170 @@ ui.uploadForm.addEventListener("submit", async (event) => {
   } finally {
     ui.uploadSubmit.disabled = false;
     ui.uploadSubmit.textContent = "Subir";
+  }
+});
+
+/* ---------- códigos ---------- */
+
+function codeStatus(code) {
+  if (code.revoked_at) return { key: "revoked", label: "Revocado" };
+  if (code.used_at) return { key: "used", label: "Usado" };
+  if (new Date(code.expires_at).getTime() <= Date.now()) {
+    return { key: "expired", label: "Vencido" };
+  }
+  return { key: "available", label: "Disponible" };
+}
+
+async function loadCodes() {
+  if (!db) return;
+
+  // Columnas explícitas: el panel no tiene permiso para leer code_hash.
+  const { data, error } = await db
+    .from("access_codes")
+    .select("id, label, created_at, expires_at, used_at, revoked_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    ui.codeEmpty.hidden = false;
+    ui.codeEmpty.textContent = "No se pudieron cargar los códigos.";
+    return;
+  }
+
+  ui.codeList.replaceChildren();
+  ui.codeEmpty.hidden = data.length > 0;
+
+  for (const code of data) {
+    ui.codeList.append(buildCodeItem(code));
+  }
+}
+
+function buildCodeItem(code) {
+  const status = codeStatus(code);
+
+  const item = document.createElement("article");
+  item.className = "admin-item code-item";
+
+  const info = document.createElement("div");
+
+  const title = document.createElement("h3");
+  title.textContent = code.label || "Sin etiqueta";
+
+  const meta = document.createElement("div");
+  meta.className = "admin-meta";
+
+  const badge = document.createElement("span");
+  badge.className = `badge ${status.key}`;
+  badge.textContent = status.label;
+
+  const created = document.createElement("span");
+  created.textContent = `Creado: ${formatDate(code.created_at)}`;
+
+  const expires = document.createElement("span");
+  expires.textContent = `Vence: ${formatDate(code.expires_at)}`;
+
+  meta.append(badge, created, expires);
+  info.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "admin-actions";
+
+  if (status.key === "available") {
+    const revoke = document.createElement("button");
+    revoke.className = "btn btn-danger";
+    revoke.type = "button";
+    revoke.textContent = "Revocar";
+    revoke.addEventListener("click", () => revokeCode(code));
+    actions.append(revoke);
+  }
+
+  item.append(info, actions);
+  return item;
+}
+
+async function revokeCode(code) {
+  const confirmed = confirm(
+    `¿Revocar el código de "${code.label || "sin etiqueta"}"? Nadie podrá usarlo.`,
+  );
+  if (!confirmed) return;
+
+  const { error } = await db
+    .from("access_codes")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", code.id);
+
+  if (error) {
+    setMessage(ui.codeStatus, "No se pudo revocar el código.", "bad");
+    return;
+  }
+
+  setMessage(ui.codeStatus, "Código revocado.", "ok");
+  loadCodes();
+}
+
+ui.codesRefresh.addEventListener("click", loadCodes);
+
+ui.codeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!db) return;
+
+  const label = ui.codeLabel.value.trim();
+  const hours = Number(ui.codeHours.value) || 24;
+
+  ui.codeSubmit.disabled = true;
+  ui.codeSubmit.textContent = "Generando…";
+  setMessage(ui.codeStatus, "", null);
+  ui.codeResult.hidden = true;
+
+  try {
+    const { data, error } = await db.functions.invoke("generate-code", {
+      body: { label: label || null, expires_in_hours: hours },
+    });
+
+    if (error) {
+      let message = "No se pudo generar el código.";
+      try {
+        const payload = await error.context.json();
+        if (payload?.error) message = payload.error;
+      } catch {
+        // respuesta sin JSON: dejamos el mensaje genérico
+      }
+      setMessage(ui.codeStatus, message, "bad");
+      return;
+    }
+
+    ui.codeValue.textContent = data.code;
+    ui.codeExpiry.textContent =
+      `Vence el ${formatDate(data.expires_at)} · se puede usar una sola vez.`;
+    ui.codeCopyStatus.textContent = "";
+    ui.codeResult.hidden = false;
+    setMessage(
+      ui.codeStatus,
+      "Código creado. Cópialo ahora: no se puede recuperar después.",
+      "ok",
+    );
+
+    ui.codeLabel.value = "";
+    loadCodes();
+  } catch {
+    setMessage(ui.codeStatus, "Error inesperado al generar el código.", "bad");
+  } finally {
+    ui.codeSubmit.disabled = false;
+    ui.codeSubmit.textContent = "Generar";
+  }
+});
+
+ui.codeCopy.addEventListener("click", async () => {
+  const code = ui.codeValue.textContent;
+
+  try {
+    await navigator.clipboard.writeText(code);
+    ui.codeCopyStatus.textContent = "Copiado";
+    setTimeout(() => {
+      ui.codeCopyStatus.textContent = "";
+    }, 2000);
+  } catch {
+    ui.codeCopyStatus.textContent = "Selecciónalo y cópialo a mano";
   }
 });
 
