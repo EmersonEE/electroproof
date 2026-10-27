@@ -58,7 +58,6 @@ const CATEGORY_LABELS = {
 
 let db = null;
 let thumbUrls = [];
-let currentCodes = [];
 
 /* ---------- helpers ---------- */
 
@@ -423,23 +422,13 @@ async function loadCodes() {
     .limit(50);
 
   if (error) {
-    currentCodes = [];
     ui.codeEmpty.hidden = false;
     ui.codeEmpty.textContent = "No se pudieron cargar los códigos.";
     return;
   }
 
-  currentCodes = data;
   ui.codeList.replaceChildren();
   ui.codeEmpty.hidden = data.length > 0;
-
-  const removable = data.filter(
-    (code) => codeStatus(code).key !== "available",
-  );
-  ui.codesCleanup.disabled = removable.length === 0;
-  ui.codesCleanup.textContent = removable.length > 0
-    ? `Limpiar no disponibles (${removable.length})`
-    : "Limpiar no disponibles";
 
   for (const code of data) {
     ui.codeList.append(buildCodeItem(code));
@@ -535,31 +524,36 @@ async function deleteCode(code) {
 }
 
 async function cleanupCodes() {
-  const removable = currentCodes.filter(
-    (code) => codeStatus(code).key !== "available",
-  );
-
-  if (removable.length === 0) {
-    setMessage(ui.codeStatus, "No hay códigos usados, vencidos o revocados.", "ok");
-    return;
-  }
-
   const confirmed = confirm(
-    `¿Eliminar ${removable.length} código(s) usados, vencidos o revocados?`,
+    "¿Eliminar TODOS los códigos usados, vencidos o revocados?\n\n" +
+      "No toca los que todavía están disponibles. Los eventos quedan en el historial sin vínculo.",
   );
   if (!confirmed) return;
 
-  const { error } = await db
+  const nowIso = new Date().toISOString();
+
+  // El filtro se aplica en la base, no sobre lo que está en pantalla.
+  const { data, error } = await db
     .from("access_codes")
     .delete()
-    .in("id", removable.map((code) => code.id));
+    .or(
+      `revoked_at.not.is.null,used_at.not.is.null,expires_at.lt.${nowIso}`,
+    )
+    .select("id");
 
   if (error) {
     setMessage(ui.codeStatus, "No se pudieron eliminar los códigos.", "bad");
     return;
   }
 
-  setMessage(ui.codeStatus, `${removable.length} código(s) eliminados.`, "ok");
+  const count = data?.length ?? 0;
+  setMessage(
+    ui.codeStatus,
+    count > 0
+      ? `${count} código(s) eliminados.`
+      : "No había códigos para limpiar.",
+    "ok",
+  );
   loadCodes();
 }
 
