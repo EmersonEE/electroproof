@@ -86,6 +86,41 @@ export async function clientIpHash(req: Request): Promise<string> {
   return await sha256(`${salt}:${ip}`);
 }
 
+/** Token de sesión: 32 bytes en base64url. */
+export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+export type ClientSession = { id: string; expires_at: string };
+
+/** Busca una sesión vigente por el hash del token. No revela el token. */
+export async function findSession(
+  supabase: ReturnType<typeof serviceClient>,
+  token: string,
+): Promise<ClientSession | null> {
+  const tokenHash = await sha256(token);
+
+  const { data, error } = await supabase
+    .from("client_sessions")
+    .select("id, expires_at")
+    .eq("token_hash", tokenHash)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as ClientSession;
+}
+
+/** Marca actividad. Si falla, no debe romper la petición. */
+export async function touchSession(
+  supabase: ReturnType<typeof serviceClient>,
+  sessionId: string,
+): Promise<void> {
+  await supabase
+    .from("client_sessions")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", sessionId);
+}
+
 /** Devuelve el admin autenticado o una Response de error lista para enviar. */
 export async function getAdmin(
   req: Request,
