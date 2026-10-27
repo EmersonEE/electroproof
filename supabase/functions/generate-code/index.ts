@@ -1,140 +1,85 @@
-
-
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function generateRandomCode(length = 8): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-
-  return Array.from(
-    bytes,
-    (byte) => alphabet[byte % alphabet.length],
-  ).join("");
-}
-
-async function sha256(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function response(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-}
+import {
+  getAdmin,
+  json,
+  preflight,
+  randomCode,
+  serviceClient,
+  sha256,
+} from "../_shared/util.ts";
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   if (req.method !== "POST") {
-    return response({ error: "Method not allowed" }, 405);
+    return json({ error: "Método no permitido" }, 405);
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = await getAdmin(req);
+    if (admin instanceof Response) return admin;
 
-    // Cliente asociado a la sesión del administrador.
-    const authHeader = req.headers.get("Authorization");
-
-    if (!authHeader?.startsWith("Bearer ")) {
-      return response({ error: "Authentication required" }, 401);
+    let body: Record<string, unknown> = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
     }
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const rawLabel = typeof body.label === "string" ? body.label.trim() : "";
+    const label = rawLabel.length > 0 ? rawLabel.slice(0, 80) : null;
 
-    const {
-      data: { user },
-      error: authError,
-    } = await userClient.auth.getUser();
+    const rawHours = Number(body.expires_in_hours);
+    const hours = Number.isFinite(rawHours)
+      ? Math.min(Math.max(Math.trunc(rawHours), 1), 168)
+      : 24;
 
-    if (authError || !user) {
-      return response({ error: "Invalid session" }, 401);
-    }
+    const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+      .toISOString();
 
-    // Comprobar que el usuario sea administrador.
-    const { data: admin, error: adminError } = await userClient
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const supabase = serviceClient();
 
-    if (adminError || !admin) {
-      return response({ error: "Administrator access required" }, 403);
-    }
-
-    // El cliente privilegiado solo se utiliza en el servidor.
-    const adminClient = createClient(supabaseUrl, serviceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
-    // Generar un código de un solo uso.
+    // Reintenta si el hash colisiona (probabilidad ínfima, pero es barato).
     for (let attempt = 0; attempt < 5; attempt++) {
-      const code = generateRandomCode();
+      const code = randomCode(8);
       const codeHash = await sha256(code);
 
-      const expiresAt = new Date(
-        Date.now() + 24 * 60 * 60 * 1000,
-      ).toISOString();
-
-      const { error: insertError } = await adminClient
+      const { data, error } = await supabase
         .from("access_codes")
         .insert({
           code_hash: codeHash,
-          created_by: user.id,
+          label,
+          created_by: admin.userId,
           expires_at: expiresAt,
+        })
+        .select("id")
+        .single();
+
+      if (!error && data) {
+        // El log no debe tumbar la respuesta si falla.
+        await supabase.from("access_logs").insert({
+          event: "code_generated",
+          access_code_id: data.id,
+          detail: label,
         });
 
-      if (!insertError) {
-        // El código original se entrega una sola vez.
-        return response({
+        return json({
           success: true,
           code,
           expires_at: expiresAt,
-          usage: "single_use",
+          expires_in_hours: hours,
         });
       }
 
-      if (insertError.code !== "23505") {
-        console.error("Database error:", insertError.code);
-        return response({ error: "Could not create access code" }, 500);
+      if (error?.code !== "23505") {
+        console.error("access_codes insert failed:", error?.code);
+        return json({ error: "No se pudo crear el código" }, 500);
       }
     }
 
-    return response({ error: "Could not generate a unique code" }, 500);
+    return json({ error: "No se pudo generar un código único" }, 500);
   } catch (error) {
     console.error("Unexpected error:", error);
-    return response({ error: "Internal server error" }, 500);
+    return json({ error: "Error interno" }, 500);
   }
 });
-
