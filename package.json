@@ -1,0 +1,21 @@
+{
+  "name": "electroproof",
+  "version": "1.0.0",
+  "description": "Portafolio privado de comprobantes con acceso por código de un solo uso",
+  "private": true,
+  "scripts": {
+    "serve": "python3 -m http.server 5173 --directory public",
+    "functions:deploy": "supabase functions deploy",
+    "db:push": "supabase db push"
+  },
+  "keywords": [],
+  "author": "Emerson",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "supabase": "^2.122.0"
+  }
+}
