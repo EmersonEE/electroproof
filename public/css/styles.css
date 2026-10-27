@@ -15,6 +15,10 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo HTML `hidden` debe ganar siempre. Sin esto, cualquier regla
+   como `.lightbox { display: grid }` lo anula y el elemento queda visible. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
