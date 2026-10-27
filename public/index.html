@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>ElectroProof · Acceso privado</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="ElectroProof">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>ElectroProof</strong>
+        <small>Trabajos reales. Confianza real.</small>
+      </span>
+    </a>
+  </header>
+
+  <main class="app">
+    <section id="gate" class="card gate">
+      <h1>Acceso privado</h1>
+      <p class="lead">
+        Ingresa el código que te compartió Emerson. Es de un solo uso
+        y dura 5 minutos.
+      </p>
+
+      <form id="code-form" autocomplete="off" novalidate>
+        <label for="code">Código de acceso</label>
+        <input
+          id="code"
+          name="code"
+          class="code-input"
+          type="text"
+          inputmode="text"
+          maxlength="9"
+          placeholder="ABCD2345"
+          autocomplete="one-time-code"
+          autocapitalize="characters"
+          spellcheck="false"
+          required
+        />
+        <button id="submit" class="btn btn-primary" type="submit">Entrar</button>
+        <p id="gate-error" class="error" role="alert" hidden></p>
+      </form>
+
+      <p class="fineprint">
+        El acceso es temporal y no se guarda en este dispositivo.
+        Por favor, no compartas el contenido.
+      </p>
+    </section>
+
+    <section id="gallery" class="gallery" hidden>
+      <div class="session-bar">
+        <div class="timer" id="timer" aria-live="off">
+          <span class="timer-label">Tiempo restante</span>
+          <strong id="timer-value">05:00</strong>
+        </div>
+        <button id="exit" class="btn btn-ghost" type="button">Salir</button>
+      </div>
+
+      <div class="progress" aria-hidden="true">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+
+      <p id="session-note" class="session-note" hidden>
+        Queda menos de un minuto. La sesión se cerrará sola.
+      </p>
+
+      <h2 id="gallery-title">Evidencias publicadas</h2>
+      <div id="grid" class="grid" aria-live="polite"></div>
+      <p id="gallery-empty" class="empty" hidden>
+        Todavía no hay evidencias publicadas.
+      </p>
+    </section>
+
+    <section id="expired" class="card expired" hidden>
+      <h1>Tu acceso terminó</h1>
+      <p class="lead">
+        Por seguridad, cada visita necesita un código nuevo.
+      </p>
+      <button id="again" class="btn btn-primary" type="button">
+        Ingresar otro código
+      </button>
+    </section>
+  </main>
+
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true"
+       aria-label="Imagen ampliada">
+    <button id="lightbox-close" class="lightbox-close" type="button"
+            aria-label="Cerrar">×</button>
+    <img id="lightbox-img" alt="" />
+  </div>
+
+  <footer class="site-footer">
+    <span>ElectroProof · Acceso temporal y privado</span>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
